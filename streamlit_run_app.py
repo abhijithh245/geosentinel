@@ -476,13 +476,12 @@ else:
     st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
 ##term
 # -------------------------------
-# 🌍 Advanced Spatial Impact (Smooth Spline + Dark Map)
+# 🌍 Spatial Impact (Before vs After + Hatching)
 # -------------------------------
-st.subheader("Spatial Impact Spread (Digital Twin)")
+st.subheader("Spatial Impact (Before vs After)")
 
 import folium
 import pandas as pd
-from shapely.ops import unary_union
 
 # -------------------------------
 # 🧠 Safe variables
@@ -506,82 +505,79 @@ if neighbors.empty:
 neighbors = neighbors[neighbors["name"] != selected["name"]]
 
 # -------------------------------
-# 📊 Compute affected zones
-# -------------------------------
-affected_geoms = []
-affected_data = []
-
-for _, row in neighbors.iterrows():
-
-    distance = selected.geometry.centroid.distance(row.geometry.centroid)
-    impact_factor = max(0, 1 - distance * 10)
-
-    affected_score = row["compound_score"] + (sim_score - base_score) * impact_factor
-
-    if impact_factor > 0.1:  # threshold for visible impact
-        affected_geoms.append(row.geometry)
-
-        affected_data.append({
-            "Zone": row["name"],
-            "Impact": round(affected_score, 2)
-        })
-
-# -------------------------------
-# 🧠 Merge geometries (CORE STEP)
-# -------------------------------
-if affected_geoms:
-    merged = unary_union(affected_geoms)
-    smooth_boundary = merged.convex_hull  # smooth outer shape
-else:
-    smooth_boundary = None
-
-# -------------------------------
-# 🗺️ Dark Theme Map
+# 🗺️ Dark Map
 # -------------------------------
 centroid = selected.geometry.centroid
 
 mini_map = folium.Map(
     location=[centroid.y, centroid.x],
-    zoom_start=12,
-    tiles="CartoDB dark_matter"   # 🔥 dark map
+    zoom_start=13,
+    tiles="CartoDB dark_matter"
 )
 
 # -------------------------------
-# 🔵 Selected zone
+# 🔵 Selected zone (dot)
 # -------------------------------
-folium.GeoJson(
-    selected.geometry,
-    style_function=lambda x: {
-        "fillColor": "none",
-        "color": "blue",
-        "weight": 3,
-    }
+folium.CircleMarker(
+    location=[centroid.y, centroid.x],
+    radius=6,
+    color="blue",
+    fill=True,
+    fill_opacity=1,
+    tooltip=f"Selected: {selected['name']} ({base_score:.2f})"
 ).add_to(mini_map)
 
 # -------------------------------
-# 🌀 Smooth CYAN SPLINE (MAIN FEATURE)
+# 📊 Compute + visualize neighbors
 # -------------------------------
-if smooth_boundary:
+affected_data = []
+
+for _, row in neighbors.iterrows():
+
+    row_centroid = row.geometry.centroid
+
+    distance = centroid.distance(row_centroid)
+    impact_factor = max(0, 1 - distance * 10)
+
+    before = row["compound_score"]
+    after = before + (sim_score - base_score) * impact_factor
+
+    affected_data.append({
+        "Zone": row["name"],
+        "Before": round(before, 2),
+        "After": round(after, 2)
+    })
+
+    # 🔴 Light red hatching effect (semi-transparent fill)
     folium.GeoJson(
-        smooth_boundary,
+        row.geometry,
         style_function=lambda x: {
-            "fillColor": "#00FFFF33",   # transparent cyan fill
-            "color": "cyan",            # cyan outline
-            "weight": 4,
+            "fillColor": "#ff4d4d33",  # light red transparent
+            "color": "#ff4d4d",
+            "weight": 1,
         },
-        tooltip="Affected Region Spread"
+        tooltip=f"{row['name']} | {before:.2f} → {after:.2f}"
+    ).add_to(mini_map)
+
+    # 🔴 Dot for affected zone
+    folium.CircleMarker(
+        location=[row_centroid.y, row_centroid.x],
+        radius=4,
+        color="red",
+        fill=True,
+        fill_opacity=0.9
     ).add_to(mini_map)
 
 # -------------------------------
-# 📍 Display map
+# 📍 Show map
 # -------------------------------
 st_folium(mini_map, width=700, height=450)
 
 # -------------------------------
-# 📊 Show affected zones
+# 📊 Before vs After table
 # -------------------------------
 if affected_data:
-    st.write("### Affected Zones (Spread)")
+    st.write("### Affected Zones (Before vs After)")
     st.dataframe(pd.DataFrame(affected_data))
 else:
-    st.info("No significant spread detected.")
+    st.info("No affected zones detected.")
