@@ -474,3 +474,84 @@ elif new_prediction >= 40:
     st.warning(f"🟡 Moderate Risk Scenario: {new_prediction:.2f}")
 else:
     st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
+
+# -------------------------------
+# 🌍 Spatial Impact Simulation
+# -------------------------------
+st.subheader("Spatial Impact (Nearby Zones Affected)")
+
+import folium
+
+# Get neighbors (touching or near)
+neighbors = gdf[gdf.geometry.touches(selected.geometry)]
+
+# If no touching, use buffer (more realistic)
+if neighbors.empty:
+    neighbors = gdf[gdf.geometry.intersects(selected.geometry.buffer(0.01))]
+
+# Create mini map centered on selected zone
+centroid = selected.geometry.centroid
+mini_map = folium.Map(location=[centroid.y, centroid.x], zoom_start=12)
+
+# -------------------------------
+# 🔵 Highlight selected zone
+# -------------------------------
+folium.GeoJson(
+    selected.geometry,
+    style_function=lambda x: {
+        "fillColor": "none",
+        "color": "blue",
+        "weight": 3,
+    },
+    tooltip=f"Selected: {selected['name']}"
+).add_to(mini_map)
+
+# -------------------------------
+# 🌀 Highlight affected neighbors (CYAN SPLINE)
+# -------------------------------
+for _, row in neighbors.iterrows():
+
+    # Calculate impact strength based on distance
+    distance = selected.geometry.centroid.distance(row.geometry.centroid)
+
+    # Simple decay effect
+    impact_factor = max(0, 1 - distance * 10)
+
+    affected_score = row["compound_score"] + (sim_score - selected["compound_score"]) * impact_factor
+
+    # Draw cyan outline (spline-like effect)
+    folium.GeoJson(
+        row.geometry,
+        style_function=lambda x, score=affected_score: {
+            "fillColor": "none",
+            "color": "cyan",   # 🔥 cyan highlight
+            "weight": 2,
+        },
+        tooltip=f"{row['name']} | Impact Score: {affected_score:.2f}"
+    ).add_to(mini_map)
+
+# -------------------------------
+# 📍 Show mini map
+# -------------------------------
+st_folium(mini_map, width=600, height=400)
+
+# -------------------------------
+# 📊 Show affected zones table
+# -------------------------------
+st.write("### Affected Nearby Zones")
+
+affected_data = []
+
+for _, row in neighbors.iterrows():
+    distance = selected.geometry.centroid.distance(row.geometry.centroid)
+    impact_factor = max(0, 1 - distance * 10)
+
+    affected_score = row["compound_score"] + (sim_score - selected["compound_score"]) * impact_factor
+
+    affected_data.append({
+        "Zone": row["name"],
+        "New Risk": round(affected_score, 2)
+    })
+
+import pandas as pd
+st.dataframe(pd.DataFrame(affected_data))
