@@ -475,9 +475,10 @@ elif new_prediction >= 40:
 else:
     st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
 # -------------------------------
-# 🌍 Spatial Impact (MAP ONLY - CLEAN)
 # -------------------------------
-st.subheader("Spatial Impact (Live Spread)")
+# 🌍 Spatial Impact (Dots Only - Clean UI)
+# -------------------------------
+st.subheader("Spatial Impact (Live Propagation)")
 
 import folium
 
@@ -491,8 +492,6 @@ except NameError:
 
 base_score = selected["compound_score"]
 sim_score = selected.get(f"day{day}_predicted", base_score)
-
-delta = max(0, sim_score - base_score)
 
 # -------------------------------
 # 📍 Find neighbors
@@ -519,20 +518,21 @@ mini_map = folium.Map(
 )
 
 # -------------------------------
-# 🔴 SELECTED ZONE (RED + PULSE)
+# 🔴 SELECTED ZONE (RED DOT + PULSE)
 # -------------------------------
 folium.CircleMarker(
     location=[centroid.y, centroid.x],
     radius=7,
     color="red",
     fill=True,
-    fill_opacity=1
+    fill_opacity=1,
+    tooltip=f"{selected['name']} | {base_score:.2f}"
 ).add_to(mini_map)
 
 # Pulse rings
 folium.Circle(
     location=[centroid.y, centroid.x],
-    radius=200,
+    radius=250,
     color="red",
     fill=False,
     weight=2,
@@ -541,7 +541,7 @@ folium.Circle(
 
 folium.Circle(
     location=[centroid.y, centroid.x],
-    radius=350,
+    radius=400,
     color="red",
     fill=False,
     weight=1,
@@ -549,30 +549,47 @@ folium.Circle(
 ).add_to(mini_map)
 
 # -------------------------------
-# 🔵 AFFECTED ZONES (VISIBLE CHANGE)
+# 🔵 AFFECTED ZONES (BLUE DOTS WITH NAME)
 # -------------------------------
+delta = max(0, sim_score - base_score)
+
 for _, row in neighbors.iterrows():
 
     row_centroid = row.geometry.centroid
 
     distance = centroid.distance(row_centroid)
 
-    # 🔥 Amplified spread
+    # stronger propagation (visible)
     impact_factor = max(0, 1 - distance * 3)
 
     after = row["compound_score"] + (delta * 1.5) * impact_factor
 
-    # Only show if actually affected
-    if after > row["compound_score"] + 0.5:
+    # 🔵 Blue dot
+    folium.CircleMarker(
+        location=[row_centroid.y, row_centroid.x],
+        radius=5,
+        color="cyan",
+        fill=True,
+        fill_opacity=0.9,
+        tooltip=f"{row['name']} → {after:.2f}"
+    ).add_to(mini_map)
 
-        folium.CircleMarker(
-            location=[row_centroid.y, row_centroid.x],
-            radius=6,
-            color="cyan",
-            fill=True,
-            fill_opacity=0.9,
-            tooltip=f"{row['name']} → {after:.2f}"
-        ).add_to(mini_map)
+    # 🔤 Name label (always visible)
+    folium.map.Marker(
+        [row_centroid.y, row_centroid.x],
+        icon=folium.DivIcon(
+            html=f"""
+            <div style="
+                color: cyan;
+                font-size: 10px;
+                font-weight: bold;
+                text-shadow: 0 0 5px black;
+            ">
+                {row['name']}
+            </div>
+            """
+        )
+    ).add_to(mini_map)
 
 # -------------------------------
 # 📍 Show map
