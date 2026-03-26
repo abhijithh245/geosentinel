@@ -553,20 +553,25 @@ folium.Circle(
 # -------------------------------
 delta = max(0, sim_score - base_score)
 
-for _, row in neighbors.iterrows():
+import math
+
+for i, (_, row) in enumerate(neighbors.iterrows()):
 
     row_centroid = row.geometry.centroid
 
     distance = centroid.distance(row_centroid)
-
-    # stronger propagation (visible)
     impact_factor = max(0, 1 - distance * 3)
 
     after = row["compound_score"] + (delta * 1.5) * impact_factor
 
-    # 🔵 Blue dot
+    lat = row_centroid.y
+    lon = row_centroid.x
+
+    # -------------------------------
+    # 🔵 Blue dot (accurate position)
+    # -------------------------------
     folium.CircleMarker(
-        location=[row_centroid.y, row_centroid.x],
+        location=[lat, lon],
         radius=5,
         color="cyan",
         fill=True,
@@ -574,9 +579,23 @@ for _, row in neighbors.iterrows():
         tooltip=f"{row['name']} → {after:.2f}"
     ).add_to(mini_map)
 
-    # 🔤 Name label (always visible)
+    # -------------------------------
+    # 🧠 Smart label offset (no overlap)
+    # -------------------------------
+    angle = (i * 45) % 360   # spread labels in directions
+    offset_dist = 0.002      # tweak if needed
+
+    dx = offset_dist * math.cos(math.radians(angle))
+    dy = offset_dist * math.sin(math.radians(angle))
+
+    label_lat = lat + dy
+    label_lon = lon + dx
+
+    # -------------------------------
+    # 🔤 Label (offset)
+    # -------------------------------
     folium.map.Marker(
-        [row_centroid.y, row_centroid.x],
+        [label_lat, label_lon],
         icon=folium.DivIcon(
             html=f"""
             <div style="
@@ -584,13 +603,13 @@ for _, row in neighbors.iterrows():
                 font-size: 10px;
                 font-weight: bold;
                 text-shadow: 0 0 5px black;
+                white-space: nowrap;
             ">
                 {row['name']}
             </div>
             """
         )
     ).add_to(mini_map)
-
 # -------------------------------
 # 📍 Show map
 # -------------------------------
