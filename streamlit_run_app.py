@@ -342,12 +342,11 @@ with chart_col2:
         days        = list(range(1, len(predictions) + 1))
         pred_arr    = np.array(predictions, dtype=float)
 
-        # ADD ZIGZAG: inject realistic daily variation noise
         np.random.seed(int(selected["compound_score"]) % 100)
-        noise = np.random.uniform(-4, 4, len(pred_arr))
+        noise = np.random.uniform(-0.2, 0.2, len(pred_arr))
         pred_arr = pred_arr + noise
-        pred_arr = np.clip(pred_arr, 60, 100)
-
+        pred_arr = np.clip(pred_arr, 60, 80)
+        
         fig2, ax2 = plt.subplots(figsize=(5, 3.4))
 
         ax2.fill_between(days, pred_arr, alpha=0.15, color=ACCENT_BLUE, zorder=2)
