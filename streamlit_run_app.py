@@ -476,7 +476,7 @@ else:
     st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
 ##term
 # -------------------------------
-# 🌍 Spatial Impact (Before vs After + Hatching)
+# 🌍 Spatial Impact (Before vs After - FIXED)
 # -------------------------------
 st.subheader("Spatial Impact (Before vs After)")
 
@@ -502,7 +502,11 @@ neighbors = gdf[gdf.geometry.touches(selected.geometry)]
 if neighbors.empty:
     neighbors = gdf[gdf.geometry.intersects(selected.geometry.buffer(0.01))]
 
-neighbors = neighbors[neighbors["name"] != selected["name"]]
+# Remove self + invalid names
+neighbors = neighbors[
+    (neighbors["name"] != selected["name"]) &
+    (neighbors["name"].notna())
+]
 
 # -------------------------------
 # 🗺️ Dark Map
@@ -520,11 +524,11 @@ mini_map = folium.Map(
 # -------------------------------
 folium.CircleMarker(
     location=[centroid.y, centroid.x],
-    radius=6,
+    radius=7,
     color="blue",
     fill=True,
     fill_opacity=1,
-    tooltip=f"Selected: {selected['name']} ({base_score:.2f})"
+    tooltip=f"{selected['name']} | {base_score:.2f}"
 ).add_to(mini_map)
 
 # -------------------------------
@@ -536,11 +540,16 @@ for _, row in neighbors.iterrows():
 
     row_centroid = row.geometry.centroid
 
+    # Distance decay
     distance = centroid.distance(row_centroid)
     impact_factor = max(0, 1 - distance * 10)
 
     before = row["compound_score"]
-    after = before + (sim_score - base_score) * impact_factor
+
+    # 🔥 FIX: only allow increase
+    delta = max(0, sim_score - base_score)
+
+    after = before + delta * impact_factor
 
     affected_data.append({
         "Zone": row["name"],
@@ -548,11 +557,11 @@ for _, row in neighbors.iterrows():
         "After": round(after, 2)
     })
 
-    # 🔴 Light red hatching effect (semi-transparent fill)
+    # 🔴 Light red highlight
     folium.GeoJson(
         row.geometry,
         style_function=lambda x: {
-            "fillColor": "#ff4d4d33",  # light red transparent
+            "fillColor": "#ff4d4d33",
             "color": "#ff4d4d",
             "weight": 1,
         },
@@ -574,7 +583,7 @@ for _, row in neighbors.iterrows():
 st_folium(mini_map, width=700, height=450)
 
 # -------------------------------
-# 📊 Before vs After table
+# 📊 Table (Before vs After)
 # -------------------------------
 if affected_data:
     st.write("### Affected Zones (Before vs After)")
