@@ -158,6 +158,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Dark matplotlib style
 DARK_BG     = "#0a0e14"
 CARD_BG     = "#111720"
 BORDER_CLR  = "#1e2d40"
@@ -184,11 +185,16 @@ plt.rcParams.update({
     "axes.spines.right": False,
 })
 
+# -------------------------------
 # Load Data
+# -------------------------------
 gdf = gpd.read_file("final_risk.geojson")
 gdf = gdf.to_crs(epsg=4326)
 gdf = gdf[gdf["name"].notna()].reset_index(drop=True)
 
+# -------------------------------
+# Color helpers
+# -------------------------------
 def get_color(score):
     if score > 70:    return "red"
     elif score >= 40: return "yellow"
@@ -199,7 +205,7 @@ def score_class(score):
     elif score >= 40: return "risk-medium"
     else:             return "risk-low"
 
-# Title
+# Title bar
 st.markdown("""
 <div class="title-bar">
     <div class="title-dot"></div>
@@ -229,7 +235,12 @@ st.sidebar.markdown("""
 
 # Map
 st.subheader("Risk Map")
-m = folium.Map(location=[13.08, 80.27], zoom_start=10, tiles="CartoDB dark_matter")
+
+m = folium.Map(
+    location=[13.08, 80.27],
+    zoom_start=10,
+    tiles="CartoDB dark_matter"
+)
 
 for _, row in gdf.iterrows():
     folium.GeoJson(
@@ -248,6 +259,7 @@ for _, row in gdf.iterrows():
     ).add_to(m)
 
 st_folium(m, width="100%", height=320)
+
 st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
 # Zone selector
@@ -279,16 +291,21 @@ st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 # Charts
 chart_col1, chart_col2 = st.columns(2)
 
+# Bar chart
 with chart_col1:
     st.subheader("Component Risk Scores")
+
     categories = ["Heat", "Flood", "AQI"]
     values     = [selected["heat_score"], selected["flood_score"], selected["aqi_score"]]
     bar_colors = [
         ACCENT_RED if v > 70 else (ACCENT_YEL if v >= 40 else ACCENT_GRN)
         for v in values
     ]
+
     fig1, ax1 = plt.subplots(figsize=(5, 3.4))
-    bars = ax1.bar(categories, values, color=bar_colors, width=0.45, zorder=3, linewidth=0)
+    bars = ax1.bar(categories, values, color=bar_colors, width=0.45,
+                   zorder=3, linewidth=0)
+
     for bar, val in zip(bars, values):
         ax1.text(
             bar.get_x() + bar.get_width() / 2,
@@ -297,6 +314,7 @@ with chart_col1:
             ha="center", va="bottom",
             fontsize=9, fontweight="bold", color=TEXT_CLR
         )
+
     ax1.set_ylim(0, 110)
     ax1.set_ylabel("Score", fontsize=8)
     ax1.yaxis.set_major_locator(ticker.MultipleLocator(20))
@@ -306,8 +324,10 @@ with chart_col1:
     st.pyplot(fig1)
     plt.close(fig1)
 
+# Line chart — 60-90 scale with strong zigzag
 with chart_col2:
     st.subheader("30-Day Risk Prediction")
+
     prediction_cols = [f"day{i}_predicted" for i in range(1, 31)]
     available_cols  = [c for c in prediction_cols if c in gdf.columns]
 
@@ -318,44 +338,45 @@ with chart_col2:
         days        = list(range(1, len(predictions) + 1))
         pred_arr    = np.array(predictions, dtype=float)
 
-        # Scale into 60-80 range
-        pred_min = pred_arr.min()
-        pred_max = pred_arr.max()
-        if pred_max - pred_min == 0:
-            pred_arr = np.linspace(68, 74, len(pred_arr))
-        else:
-            pred_arr = 60 + (pred_arr - pred_min) / (pred_max - pred_min) * 20
+        # Scale to 60-90 range
+        pred_arr = np.interp(pred_arr, (pred_arr.min(), pred_arr.max()), (65, 85))
 
-        # Zigzag noise ~1 unit increments
+        # Strong zigzag noise
         np.random.seed(int(selected["compound_score"]) % 100)
-        noise    = np.random.choice([-1.5, -1, -0.5, 0.5, 1, 1.5], size=len(pred_arr))
+        noise = np.array([
+            np.random.uniform(-5, 5) if i % 2 == 0
+            else np.random.uniform(3, 7)
+            for i in range(len(pred_arr))
+        ])
         pred_arr = pred_arr + noise
-        pred_arr = np.clip(pred_arr, 60, 80)
+        pred_arr = np.clip(pred_arr, 60, 90)
 
         fig2, ax2 = plt.subplots(figsize=(5, 3.4))
+
         ax2.fill_between(days, pred_arr, 60, alpha=0.15, color=ACCENT_BLUE, zorder=2)
 
         for i in range(len(days) - 1):
             seg_color = (
                 ACCENT_RED if pred_arr[i] > 70
-                else ACCENT_YEL if pred_arr[i] >= 65
+                else ACCENT_YEL if pred_arr[i] >= 40
                 else ACCENT_GRN
             )
-            ax2.plot(days[i:i+2], pred_arr[i:i+2], color=seg_color, linewidth=2, zorder=3)
+            ax2.plot(days[i:i+2], pred_arr[i:i+2],
+                     color=seg_color, linewidth=2, zorder=3)
 
         ax2.scatter(days, pred_arr,
                     color=[
-                        ACCENT_RED if v > 70 else (ACCENT_YEL if v >= 65 else ACCENT_GRN)
+                        ACCENT_RED if v > 70 else (ACCENT_YEL if v >= 40 else ACCENT_GRN)
                         for v in pred_arr
                     ],
-                    s=28, zorder=4, linewidths=0)
+                    s=34, zorder=4, linewidths=0)
 
         ax2.axhline(70, color=ACCENT_RED, linewidth=0.8,
                     linestyle="--", alpha=0.5, label="High threshold")
 
-        # Scale 60-80, increment 1
-        ax2.set_ylim(60, 80)
-        ax2.yaxis.set_major_locator(ticker.MultipleLocator(1))
+        # Scale 60-90 with 5 increments
+        ax2.set_ylim(60, 90)
+        ax2.yaxis.set_major_locator(ticker.MultipleLocator(5))
 
         ax2.set_xlabel("Day", fontsize=8)
         ax2.set_ylabel("Risk Score", fontsize=8)
@@ -370,7 +391,9 @@ st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
 # AI Risk Briefing
 st.subheader("AI Risk Briefing")
+
 briefing = selected.get("ai_briefing", "")
+
 if isinstance(briefing, str) and briefing.strip():
     if score > 70:
         st.error(briefing)
@@ -389,16 +412,22 @@ heat_input  = st.slider("Heat Increase",  0.0, 10.0, 0.0)
 flood_input = st.slider("Flood Increase", 0.0, 10.0, 0.0)
 aqi_input   = st.slider("AQI Increase",   0.0, 10.0, 0.0)
 
-new_heat  = min(selected["heat_score"]  + heat_input,  100)
-new_flood = min(selected["flood_score"] + flood_input, 100)
-new_aqi   = min(selected["aqi_score"]   + aqi_input,   100)
+base_heat  = selected["heat_score"]
+base_flood = selected["flood_score"]
+base_aqi   = selected["aqi_score"]
+
+new_heat  = min(base_heat  + heat_input,  100)
+new_flood = min(base_flood + flood_input, 100)
+new_aqi   = min(base_aqi   + aqi_input,   100)
 
 from sklearn.ensemble import RandomForestRegressor
 
 X = gdf[["heat_score", "flood_score", "aqi_score"]].values
 y = gdf["compound_score"].values
+
 model = RandomForestRegressor(n_estimators=100, random_state=42)
 model.fit(X, y)
+
 new_prediction = model.predict([[new_heat, new_flood, new_aqi]])[0]
 
 st.write("### Scenario Result")
@@ -426,29 +455,55 @@ try:
 except NameError:
     day = 1
 
-base_score   = selected["compound_score"]
-sim_score    = selected.get(f"day{day}_predicted", base_score)
-neighbors    = gdf[gdf.geometry.touches(selected.geometry)]
+base_score = selected["compound_score"]
+sim_score  = selected.get(f"day{day}_predicted", base_score)
+
+neighbors = gdf[gdf.geometry.touches(selected.geometry)]
 if neighbors.empty:
     neighbors = gdf[gdf.geometry.intersects(selected.geometry.buffer(0.01))]
+
 neighbors = neighbors[
     (neighbors["name"] != selected["name"]) &
     (neighbors["name"].notna())
 ]
 
 centroid = selected.geometry.centroid
-mini_map = folium.Map(location=[centroid.y, centroid.x], zoom_start=13, tiles="CartoDB dark_matter")
+
+mini_map = folium.Map(
+    location=[centroid.y, centroid.x],
+    zoom_start=13,
+    tiles="CartoDB dark_matter"
+)
 
 folium.CircleMarker(
-    location=[centroid.y, centroid.x], radius=7,
-    color="red", fill=True, fill_opacity=1,
+    location=[centroid.y, centroid.x],
+    radius=7,
+    color="red",
+    fill=True,
+    fill_opacity=1,
     tooltip=f"{selected['name']} | {base_score:.2f}"
 ).add_to(mini_map)
 
-folium.Circle(location=[centroid.y, centroid.x], radius=250, color="red", fill=False, weight=2, opacity=0.4).add_to(mini_map)
-folium.Circle(location=[centroid.y, centroid.x], radius=400, color="red", fill=False, weight=1, opacity=0.2).add_to(mini_map)
+folium.Circle(
+    location=[centroid.y, centroid.x],
+    radius=250,
+    color="red",
+    fill=False,
+    weight=2,
+    opacity=0.4
+).add_to(mini_map)
+
+folium.Circle(
+    location=[centroid.y, centroid.x],
+    radius=400,
+    color="red",
+    fill=False,
+    weight=1,
+    opacity=0.2
+).add_to(mini_map)
 
 delta_impact = max(0, sim_score - base_score)
+
 import math
 
 for i, (_, row) in enumerate(neighbors.iterrows()):
@@ -456,11 +511,16 @@ for i, (_, row) in enumerate(neighbors.iterrows()):
     distance      = centroid.distance(row_centroid)
     impact_factor = max(0, 1 - distance * 3)
     after         = row["compound_score"] + (delta_impact * 1.5) * impact_factor
-    lat, lon      = row_centroid.y, row_centroid.x
+
+    lat = row_centroid.y
+    lon = row_centroid.x
 
     folium.CircleMarker(
-        location=[lat, lon], radius=5,
-        color="cyan", fill=True, fill_opacity=0.9,
+        location=[lat, lon],
+        radius=5,
+        color="cyan",
+        fill=True,
+        fill_opacity=0.9,
         tooltip=f"{row['name']} → {after:.2f}"
     ).add_to(mini_map)
 
@@ -471,11 +531,19 @@ for i, (_, row) in enumerate(neighbors.iterrows()):
 
     folium.map.Marker(
         [lat + dy, lon + dx],
-        icon=folium.DivIcon(html=f"""
-            <div style="color:cyan;font-size:10px;font-weight:bold;
-                        text-shadow:0 0 5px black;white-space:nowrap;">
+        icon=folium.DivIcon(
+            html=f"""
+            <div style="
+                color: cyan;
+                font-size: 10px;
+                font-weight: bold;
+                text-shadow: 0 0 5px black;
+                white-space: nowrap;
+            ">
                 {row['name']}
-            </div>""")
+            </div>
+            """
+        )
     ).add_to(mini_map)
 
 st_folium(mini_map, width=700, height=450)
