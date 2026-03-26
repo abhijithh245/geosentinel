@@ -474,14 +474,12 @@ elif new_prediction >= 40:
     st.warning(f"🟡 Moderate Risk Scenario: {new_prediction:.2f}")
 else:
     st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
-##term
 # -------------------------------
-# 🌍 Spatial Impact (Animated + Correct Colors)
+# 🌍 Spatial Impact (MAP ONLY - CLEAN)
 # -------------------------------
-st.subheader("Spatial Impact (Live Propagation)")
+st.subheader("Spatial Impact (Live Spread)")
 
 import folium
-import pandas as pd
 
 # -------------------------------
 # 🧠 Safe variables
@@ -493,6 +491,8 @@ except NameError:
 
 base_score = selected["compound_score"]
 sim_score = selected.get(f"day{day}_predicted", base_score)
+
+delta = max(0, sim_score - base_score)
 
 # -------------------------------
 # 📍 Find neighbors
@@ -519,22 +519,20 @@ mini_map = folium.Map(
 )
 
 # -------------------------------
-# 🔴 SELECTED ZONE (RED DOT + PULSE)
+# 🔴 SELECTED ZONE (RED + PULSE)
 # -------------------------------
-# Core red dot
 folium.CircleMarker(
     location=[centroid.y, centroid.x],
-    radius=6,
+    radius=7,
     color="red",
     fill=True,
-    fill_opacity=1,
-    tooltip=f"{selected['name']} | {base_score:.2f}"
+    fill_opacity=1
 ).add_to(mini_map)
 
-# Pulse ring (fake animation)
+# Pulse rings
 folium.Circle(
     location=[centroid.y, centroid.x],
-    radius=200,   # meters
+    radius=200,
     color="red",
     fill=False,
     weight=2,
@@ -551,48 +549,32 @@ folium.Circle(
 ).add_to(mini_map)
 
 # -------------------------------
-# 🔵 AFFECTED ZONES (BLUE DOTS)
+# 🔵 AFFECTED ZONES (VISIBLE CHANGE)
 # -------------------------------
-affected_data = []
-
-delta = max(0, sim_score - base_score)
-
 for _, row in neighbors.iterrows():
 
     row_centroid = row.geometry.centroid
 
     distance = centroid.distance(row_centroid)
-    impact_factor = max(0, 1 - distance * 10)
 
-    before = row["compound_score"]
-    after = before + delta * impact_factor
+    # 🔥 Amplified spread
+    impact_factor = max(0, 1 - distance * 3)
 
-    affected_data.append({
-        "Zone": row["name"],
-        "Before": round(before, 2),
-        "After": round(after, 2)
-    })
+    after = row["compound_score"] + (delta * 1.5) * impact_factor
 
-    # 🔵 Blue dots (affected)
-    folium.CircleMarker(
-        location=[row_centroid.y, row_centroid.x],
-        radius=5,
-        color="cyan",
-        fill=True,
-        fill_opacity=0.9,
-        tooltip=f"{row['name']} | {before:.2f} → {after:.2f}"
-    ).add_to(mini_map)
+    # Only show if actually affected
+    if after > row["compound_score"] + 0.5:
+
+        folium.CircleMarker(
+            location=[row_centroid.y, row_centroid.x],
+            radius=6,
+            color="cyan",
+            fill=True,
+            fill_opacity=0.9,
+            tooltip=f"{row['name']} → {after:.2f}"
+        ).add_to(mini_map)
 
 # -------------------------------
 # 📍 Show map
 # -------------------------------
 st_folium(mini_map, width=700, height=450)
-
-# -------------------------------
-# 📊 Table
-# -------------------------------
-if affected_data:
-    st.write("### Affected Zones (Before vs After)")
-    st.dataframe(pd.DataFrame(affected_data))
-else:
-    st.info("No affected zones detected.")
