@@ -406,3 +406,25 @@ if isinstance(briefing, str) and briefing.strip():
         st.success(briefing)
 else:
     st.info("⚠️ AI briefing not available for this zone.")
+# -------------------------------
+# ⏳ Digital Twin Time Simulation
+# -------------------------------
+st.subheader("Digital Twin Simulation")
+
+day = st.slider("Select Prediction Day", 1, 30)
+
+pred_col = f"day{day}_predicted"
+
+# Get simulated score
+if pred_col in selected:
+    sim_score = selected[pred_col]
+else:
+    sim_score = selected["compound_score"]
+
+# Display risk with color
+if sim_score > 70:
+    st.error(f"🔴 High Risk on Day {day}: {sim_score:.2f}")
+elif sim_score >= 40:
+    st.warning(f"🟡 Moderate Risk on Day {day}: {sim_score:.2f}")
+else:
+    st.success(f"🟢 Low Risk on Day {day}: {sim_score:.2f}")
