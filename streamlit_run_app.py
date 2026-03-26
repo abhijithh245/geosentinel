@@ -209,7 +209,7 @@ def score_class(score):
 st.markdown("""
 <div class="title-bar">
     <div class="title-dot"></div>
-    <h1 style="margin:0">Chennai Compound Risk Early Warning</h1>
+    <h1 style="margin:0">Urban Risk Intelligence System - Chennai</h1>
     <span class="live-badge">Live</span>
 </div>
 """, unsafe_allow_html=True)
