@@ -476,9 +476,9 @@ else:
     st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
 ##term
 # -------------------------------
-# 🌍 Spatial Impact (Before vs After - FIXED)
+# 🌍 Spatial Impact (Animated + Correct Colors)
 # -------------------------------
-st.subheader("Spatial Impact (Before vs After)")
+st.subheader("Spatial Impact (Live Propagation)")
 
 import folium
 import pandas as pd
@@ -502,7 +502,6 @@ neighbors = gdf[gdf.geometry.touches(selected.geometry)]
 if neighbors.empty:
     neighbors = gdf[gdf.geometry.intersects(selected.geometry.buffer(0.01))]
 
-# Remove self + invalid names
 neighbors = neighbors[
     (neighbors["name"] != selected["name"]) &
     (neighbors["name"].notna())
@@ -520,35 +519,52 @@ mini_map = folium.Map(
 )
 
 # -------------------------------
-# 🔵 Selected zone (dot)
+# 🔴 SELECTED ZONE (RED DOT + PULSE)
 # -------------------------------
+# Core red dot
 folium.CircleMarker(
     location=[centroid.y, centroid.x],
-    radius=7,
-    color="blue",
+    radius=6,
+    color="red",
     fill=True,
     fill_opacity=1,
     tooltip=f"{selected['name']} | {base_score:.2f}"
 ).add_to(mini_map)
 
+# Pulse ring (fake animation)
+folium.Circle(
+    location=[centroid.y, centroid.x],
+    radius=200,   # meters
+    color="red",
+    fill=False,
+    weight=2,
+    opacity=0.4
+).add_to(mini_map)
+
+folium.Circle(
+    location=[centroid.y, centroid.x],
+    radius=350,
+    color="red",
+    fill=False,
+    weight=1,
+    opacity=0.2
+).add_to(mini_map)
+
 # -------------------------------
-# 📊 Compute + visualize neighbors
+# 🔵 AFFECTED ZONES (BLUE DOTS)
 # -------------------------------
 affected_data = []
+
+delta = max(0, sim_score - base_score)
 
 for _, row in neighbors.iterrows():
 
     row_centroid = row.geometry.centroid
 
-    # Distance decay
     distance = centroid.distance(row_centroid)
     impact_factor = max(0, 1 - distance * 10)
 
     before = row["compound_score"]
-
-    # 🔥 FIX: only allow increase
-    delta = max(0, sim_score - base_score)
-
     after = before + delta * impact_factor
 
     affected_data.append({
@@ -557,24 +573,14 @@ for _, row in neighbors.iterrows():
         "After": round(after, 2)
     })
 
-    # 🔴 Light red highlight
-    folium.GeoJson(
-        row.geometry,
-        style_function=lambda x: {
-            "fillColor": "#ff4d4d33",
-            "color": "#ff4d4d",
-            "weight": 1,
-        },
-        tooltip=f"{row['name']} | {before:.2f} → {after:.2f}"
-    ).add_to(mini_map)
-
-    # 🔴 Dot for affected zone
+    # 🔵 Blue dots (affected)
     folium.CircleMarker(
         location=[row_centroid.y, row_centroid.x],
-        radius=4,
-        color="red",
+        radius=5,
+        color="cyan",
         fill=True,
-        fill_opacity=0.9
+        fill_opacity=0.9,
+        tooltip=f"{row['name']} | {before:.2f} → {after:.2f}"
     ).add_to(mini_map)
 
 # -------------------------------
@@ -583,7 +589,7 @@ for _, row in neighbors.iterrows():
 st_folium(mini_map, width=700, height=450)
 
 # -------------------------------
-# 📊 Table (Before vs After)
+# 📊 Table
 # -------------------------------
 if affected_data:
     st.write("### Affected Zones (Before vs After)")
