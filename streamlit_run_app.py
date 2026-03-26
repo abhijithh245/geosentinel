@@ -407,24 +407,70 @@ if isinstance(briefing, str) and briefing.strip():
 else:
     st.info("⚠️ AI briefing not available for this zone.")
 # -------------------------------
-# ⏳ Digital Twin Time Simulation
+# 🌍 Scenario Simulation (Digital Twin)
 # -------------------------------
-st.subheader("Digital Twin Simulation")
+st.subheader("Scenario Simulation")
 
-day = st.slider("Select Prediction Day", 1, 30)
+st.caption("Simulate how changes in environment affect risk")
 
-pred_col = f"day{day}_predicted"
+# User inputs
+heat_input = st.slider("Heat Increase", 0.0, 10.0, 0.0)
+flood_input = st.slider("Flood Increase", 0.0, 10.0, 0.0)
+aqi_input = st.slider("AQI Increase", 0.0, 10.0, 0.0)
 
-# Get simulated score
-if pred_col in selected:
-    sim_score = selected[pred_col]
+# Base values
+base_heat = selected["heat_score"]
+base_flood = selected["flood_score"]
+base_aqi = selected["aqi_score"]
+
+# Apply changes
+new_heat = base_heat + heat_input
+new_flood = base_flood + flood_input
+new_aqi = base_aqi + aqi_input
+
+# Keep values realistic
+new_heat = min(new_heat, 100)
+new_flood = min(new_flood, 100)
+new_aqi = min(new_aqi, 100)
+
+# -------------------------------
+# 🧠 Predict using ML model
+# -------------------------------
+from sklearn.ensemble import RandomForestRegressor
+import numpy as np
+
+# Re-train model (simple approach)
+X = gdf[["heat_score", "flood_score", "aqi_score"]].values
+y = gdf["compound_score"].values
+
+model = RandomForestRegressor(n_estimators=100, random_state=42)
+model.fit(X, y)
+
+# Predict new scenario
+new_prediction = model.predict([[new_heat, new_flood, new_aqi]])[0]
+
+# -------------------------------
+# 📊 Display Results
+# -------------------------------
+st.write("### Scenario Result")
+
+st.write(f"Original Risk: {selected['compound_score']:.2f}")
+st.write(f"Simulated Risk: {new_prediction:.2f}")
+
+# Risk change
+delta = new_prediction - selected["compound_score"]
+
+if delta > 0:
+    st.write(f"⚠️ Risk Increased by {delta:.2f}")
 else:
-    sim_score = selected["compound_score"]
+    st.write(f"✅ Risk Decreased by {abs(delta):.2f}")
 
-# Display risk with color
-if sim_score > 70:
-    st.error(f"🔴 High Risk on Day {day}: {sim_score:.2f}")
-elif sim_score >= 40:
-    st.warning(f"🟡 Moderate Risk on Day {day}: {sim_score:.2f}")
+# -------------------------------
+# 🚨 Alert based on new prediction
+# -------------------------------
+if new_prediction > 70:
+    st.error(f"🔴 High Risk Scenario: {new_prediction:.2f}")
+elif new_prediction >= 40:
+    st.warning(f"🟡 Moderate Risk Scenario: {new_prediction:.2f}")
 else:
-    st.success(f"🟢 Low Risk on Day {day}: {sim_score:.2f}")
+    st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
