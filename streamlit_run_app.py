@@ -478,7 +478,7 @@ else:
 # -------------------------------
 # 🌍 Spatial Impact (Dots Only - Clean UI)
 # -------------------------------
-st.subheader("Spatial Impact (Live Propagation)")
+st.subheader("Affected Places")
 
 import folium
 
