@@ -229,7 +229,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
-st.sidebar.markdown("## 🏆 Top 5 High-Risk Zones")
+st.sidebar.markdown("## Top 5 High-Risk Zones")
 top5 = gdf.sort_values(by="compound_score", ascending=False).head(5)
 for rank, (_, row) in enumerate(top5.iterrows(), 1):
     st.sidebar.markdown(f"""
@@ -306,7 +306,7 @@ chart_col1, chart_col2 = st.columns(2)
 
 # Bar chart
 with chart_col1:
-    st.subheader("📊 Component Risk Scores")
+    st.subheader(" Component Risk Scores")
 
     categories = ["Heat", "Flood", "AQI"]
     values     = [selected["heat_score"], selected["flood_score"], selected["aqi_score"]]
@@ -346,7 +346,7 @@ with chart_col2:
     available_cols   = [c for c in prediction_cols if c in gdf.columns]
 
     if not available_cols:
-        st.error("❌ No prediction data found. Run ML script first.")
+        st.error(" No prediction data found. Run ML script first.")
     else:
         predictions = [selected[c] for c in available_cols]
         days        = list(range(1, len(predictions) + 1))
@@ -393,7 +393,7 @@ with chart_col2:
 st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
 # ─── AI Risk Briefing ─────────────────────────────────────────────────────────
-st.subheader("🧠 AI Risk Briefing")
+st.subheader(" AI Risk Briefing")
 
 briefing = selected.get("ai_briefing", "")
 
@@ -461,9 +461,9 @@ st.write(f"Simulated Risk: {new_prediction:.2f}")
 delta = new_prediction - selected["compound_score"]
 
 if delta > 0:
-    st.write(f"⚠️ Risk Increased by {delta:.2f}")
+    st.write(f" Risk Increased by {delta:.2f}")
 else:
-    st.write(f"✅ Risk Decreased by {abs(delta):.2f}")
+    st.write(f" Risk Decreased by {abs(delta):.2f}")
 
 # -------------------------------
 # 🚨 Alert based on new prediction
