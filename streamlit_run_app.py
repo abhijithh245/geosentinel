@@ -273,38 +273,6 @@ for _, row in gdf.iterrows():
     ).add_to(m)
 
 st_folium(m, width="100%", height=480)
-# ===============================
-# ⏳ DIGITAL TWIN MAP (APPENDED)
-# ===============================
-st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-st.subheader("🧭 Future Risk Simulation Map")
-
-day = st.slider("Select Day for Map Simulation", 1, 30, key="map_day")
-
-m2 = folium.Map(
-    location=[13.08, 80.27],
-    zoom_start=10,
-    tiles="CartoDB dark_matter"
-)
-
-for _, row in gdf.iterrows():
-    sim_score = row.get(f"day{day}_predicted", row["compound_score"])
-
-    folium.GeoJson(
-        row["geometry"],
-        style_function=lambda x, score=sim_score: {
-            "fillColor": get_color(score),
-            "color": "#1e2d40",
-            "weight": 1,
-            "fillOpacity": 0.65,
-        },
-        tooltip=folium.Tooltip(
-            f"<b>{row['name']}</b><br>"
-            f"Day {day} Risk: <b>{sim_score:.2f}</b>"
-        )
-    ).add_to(m2)
-
-st_folium(m2, width="100%", height=480)
 
 st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
 
