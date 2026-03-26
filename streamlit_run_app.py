@@ -476,46 +476,78 @@ else:
     st.success(f"🟢 Low Risk Scenario: {new_prediction:.2f}")
 ##term
 # -------------------------------
-# 🌍 Spatial Impact Simulation (SAFE + SELF-CONTAINED)
+# 🌍 Advanced Spatial Impact (Smooth Spline + Dark Map)
 # -------------------------------
-st.subheader("Spatial Impact (Nearby Zones Affected)")
+st.subheader("Spatial Impact Spread (Digital Twin)")
 
 import folium
 import pandas as pd
+from shapely.ops import unary_union
 
 # -------------------------------
-# 🧠 Ensure required variables exist
+# 🧠 Safe variables
 # -------------------------------
-# Fallback for 'day'
 try:
     day
 except NameError:
     day = 1
 
-# Fallback for simulated score
 base_score = selected["compound_score"]
 sim_score = selected.get(f"day{day}_predicted", base_score)
 
 # -------------------------------
-# 📍 Find neighboring zones
+# 📍 Find neighbors
 # -------------------------------
 neighbors = gdf[gdf.geometry.touches(selected.geometry)]
 
-# If no touching neighbors → use buffer
 if neighbors.empty:
     neighbors = gdf[gdf.geometry.intersects(selected.geometry.buffer(0.01))]
 
-# Remove self from neighbors
 neighbors = neighbors[neighbors["name"] != selected["name"]]
 
 # -------------------------------
-# 🗺️ Create mini map
+# 📊 Compute affected zones
 # -------------------------------
-centroid = selected.geometry.centroid
-mini_map = folium.Map(location=[centroid.y, centroid.x], zoom_start=12)
+affected_geoms = []
+affected_data = []
+
+for _, row in neighbors.iterrows():
+
+    distance = selected.geometry.centroid.distance(row.geometry.centroid)
+    impact_factor = max(0, 1 - distance * 10)
+
+    affected_score = row["compound_score"] + (sim_score - base_score) * impact_factor
+
+    if impact_factor > 0.1:  # threshold for visible impact
+        affected_geoms.append(row.geometry)
+
+        affected_data.append({
+            "Zone": row["name"],
+            "Impact": round(affected_score, 2)
+        })
 
 # -------------------------------
-# 🔵 Highlight selected zone
+# 🧠 Merge geometries (CORE STEP)
+# -------------------------------
+if affected_geoms:
+    merged = unary_union(affected_geoms)
+    smooth_boundary = merged.convex_hull  # smooth outer shape
+else:
+    smooth_boundary = None
+
+# -------------------------------
+# 🗺️ Dark Theme Map
+# -------------------------------
+centroid = selected.geometry.centroid
+
+mini_map = folium.Map(
+    location=[centroid.y, centroid.x],
+    zoom_start=12,
+    tiles="CartoDB dark_matter"   # 🔥 dark map
+)
+
+# -------------------------------
+# 🔵 Selected zone
 # -------------------------------
 folium.GeoJson(
     selected.geometry,
@@ -523,56 +555,33 @@ folium.GeoJson(
         "fillColor": "none",
         "color": "blue",
         "weight": 3,
-    },
-    tooltip=f"Selected: {selected['name']}"
+    }
 ).add_to(mini_map)
 
 # -------------------------------
-# 🌀 Highlight affected neighbors (CYAN SPLINE STYLE)
+# 🌀 Smooth CYAN SPLINE (MAIN FEATURE)
 # -------------------------------
-affected_data = []
-
-for _, row in neighbors.iterrows():
-
-    # Skip if missing data
-    if "compound_score" not in row:
-        continue
-
-    # Distance-based decay
-    distance = selected.geometry.centroid.distance(row.geometry.centroid)
-    impact_factor = max(0, 1 - distance * 10)
-
-    # Compute affected score
-    affected_score = row["compound_score"] + (sim_score - base_score) * impact_factor
-
-    # Store data
-    affected_data.append({
-        "Zone": row["name"],
-        "Original Risk": round(row["compound_score"], 2),
-        "New Risk": round(affected_score, 2)
-    })
-
-    # Draw CYAN outline
+if smooth_boundary:
     folium.GeoJson(
-        row.geometry,
+        smooth_boundary,
         style_function=lambda x: {
-            "fillColor": "none",
-            "color": "cyan",
-            "weight": 2,
+            "fillColor": "#00FFFF33",   # transparent cyan fill
+            "color": "cyan",            # cyan outline
+            "weight": 4,
         },
-        tooltip=f"{row['name']} | New Risk: {affected_score:.2f}"
+        tooltip="Affected Region Spread"
     ).add_to(mini_map)
 
 # -------------------------------
-# 📍 Display mini map
+# 📍 Display map
 # -------------------------------
-st_folium(mini_map, width=600, height=400)
+st_folium(mini_map, width=700, height=450)
 
 # -------------------------------
-# 📊 Show affected zones table
+# 📊 Show affected zones
 # -------------------------------
 if affected_data:
-    st.write("### Affected Nearby Zones")
+    st.write("### Affected Zones (Spread)")
     st.dataframe(pd.DataFrame(affected_data))
 else:
-    st.info("No nearby zones affected.")
+    st.info("No significant spread detected.")
